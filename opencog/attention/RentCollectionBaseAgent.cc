@@ -29,6 +29,8 @@
 #include <opencog/attention/atom_types.h>
 
 #include <opencog/atomspace/AtomSpace.h>
+#include <opencog/attentionbank/AttentionBank.h>
+#include <opencog/cogserver/server/CogServer.h>
 
 #include "RentCollectionBaseAgent.h"
 
@@ -40,51 +42,42 @@
 using namespace opencog;
 
 RentCollectionBaseAgent::RentCollectionBaseAgent(CogServer& cs) :
-    Agent(cs)
+    Agent(cs), _atq(&cs.getAtomSpace())
 {
-    // init starting wages/rents. these should quickly change and reach
-    // stable values, which adapt to the system dynamics
-    STIAtomRent = config().get_int("ECAN_STARTING_ATOM_STI_RENT", 10);
-    LTIAtomRent = config().get_int("ECAN_STARTING_ATOM_LTI_RENT", 1);
-
-    targetSTI = config().get_int("TARGET_STI_FUNDS", 10000);
-    stiFundsBuffer = config().get_int("STI_FUNDS_BUFFER", 10000);
-    targetLTI = config().get_int("TARGET_LTI_FUNDS", 10000);
-    ltiFundsBuffer = config().get_int("LTI_FUNDS_BUFFER", 10000);
-
+    _bank = &attentionbank(_as);
+    load_params();
     // Provide a logger
     setLogger(new opencog::Logger("RentCollectionAgent.log", Logger::FINE, true));
 }
 
 void RentCollectionBaseAgent::run()
 {
+    load_params();
     HandleSeq targetSet;
     selectTargets(targetSet);
 
     if (targetSet.size() == 0) return;
 
-    for (Handle& h : targetSet) {
-        int sti = h->getAttentionValue()->getSTI();
-        int lti = h->getAttentionValue()->getLTI();
-        int stiRent = calculate_STI_Rent();
-        int ltiRent = calculate_LTI_Rent();
-
-        if (stiRent > sti)
-            stiRent = sti;
-
-        if (ltiRent > lti)
-            ltiRent = lti;
-
-        h->setSTI(sti - stiRent);
-        h->setLTI(lti - ltiRent);
-    }
-
+    collectRent(targetSet);
+   
     std::this_thread::sleep_for(std::chrono::milliseconds(get_sleep_time()));
 }
 
-int RentCollectionBaseAgent::calculate_STI_Rent()
+void RentCollectionBaseAgent::load_params(void)
 {
-    int funds = _as->get_STI_funds();
+    // init starting wages/rents. these should quickly change and reach
+    // stable values, which adapt to the system dynamics
+    STIAtomRent = std::stod(_atq.get_param_value(AttentionParamQuery::rent_starting_sti_rent));
+    LTIAtomRent = std::stod(_atq.get_param_value(AttentionParamQuery::rent_starting_lti_rent));
+    targetSTI = std::stod(_atq.get_param_value(AttentionParamQuery::rent_target_sti_funds));
+    stiFundsBuffer = std::stoi(_atq.get_param_value(AttentionParamQuery::rent_sti_funds_buffer));
+    targetLTI = std::stod(_atq.get_param_value(AttentionParamQuery::rent_target_lti_funds));
+    ltiFundsBuffer = std::stoi(_atq.get_param_value(AttentionParamQuery::rent_lti_funds_buffer));
+}
+
+double RentCollectionBaseAgent::calculate_STI_Rent()
+{
+    int funds = _bank->getSTIFunds();
     double diff  = targetSTI - funds;
     double ndiff = diff / stiFundsBuffer;
     ndiff = std::min(ndiff, 1.0);
@@ -97,12 +90,12 @@ int RentCollectionBaseAgent::calculate_STI_Rent()
         if ((rand() % 100) > (100 * res))
             res = 1;
 
-    return floor(res);
+    return res;
 }
 
-int RentCollectionBaseAgent::calculate_LTI_Rent()
+double RentCollectionBaseAgent::calculate_LTI_Rent()
 {
-    int funds = _as->get_LTI_funds();
+    int funds = _bank->getLTIFunds();
     double diff  = targetLTI - funds;
     double ndiff = diff / ltiFundsBuffer;
     ndiff = std::min(ndiff, 1.0);

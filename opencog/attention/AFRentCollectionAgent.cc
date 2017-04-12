@@ -29,10 +29,11 @@
 #include <opencog/attention/atom_types.h>
 
 #include <opencog/atomspace/AtomSpace.h>
+#include <opencog/attentionbank/AttentionBank.h>
 
 #include "AFRentCollectionAgent.h"
+#include "AttentionParamQuery.h"
 
-#include <chrono>
 #include <thread>
 //#define DEBUG
 #ifdef DEBUG
@@ -43,7 +44,7 @@ using namespace opencog;
 
 AFRentCollectionAgent::AFRentCollectionAgent(CogServer& cs) : RentCollectionBaseAgent(cs)
 {
-    set_sleep_time(500);
+    last_update      = high_resolution_clock::now();
 }
 
 AFRentCollectionAgent::~AFRentCollectionAgent() {
@@ -52,10 +53,34 @@ AFRentCollectionAgent::~AFRentCollectionAgent() {
 void AFRentCollectionAgent::selectTargets(HandleSeq &targetSetOut)
 {
     std::back_insert_iterator< std::vector<Handle> > out_hi(targetSetOut);
-    _as->get_handle_set_in_attentional_focus(out_hi);
-    /* Without adding this sleep code right below the above method call,
-     * nlp-parse evaluation thread waits for minutes before it gets a chance to
-     * run.
-     */
-    std::this_thread::sleep_for(std::chrono::nanoseconds(1));
+    attentionbank(_as).get_handle_set_in_attentional_focus(out_hi);
+}
+
+void AFRentCollectionAgent::collectRent(HandleSeq& targetSet)
+{
+    update_cycle = std::stod(_atq.get_param_value(AttentionParamQuery::af_rent_update_freq));
+
+    // calculate elapsed time Et
+    seconds elapsed_time = duration_cast<seconds>
+                           (high_resolution_clock::now() - last_update);
+    if (elapsed_time.count() <  update_cycle )
+        return;
+
+    int w = elapsed_time.count() / update_cycle;
+
+    for (const Handle& h : targetSet) {
+        int sti = _bank->get_sti(h);
+        int lti = _bank->get_lti(h);
+        int stiRent = calculate_STI_Rent();
+        int ltiRent = calculate_LTI_Rent();
+
+        if (stiRent > sti) stiRent = sti;
+        if (ltiRent > lti) ltiRent = lti;
+
+        _bank->set_sti(h, sti - w * stiRent);
+        _bank->set_lti(h, lti - w * ltiRent);
+    }
+
+    // update elapsed time
+    last_update = high_resolution_clock::now();
 }

@@ -29,55 +29,52 @@
 #include <opencog/attention/atom_types.h>
 
 #include <opencog/atomspace/AtomSpace.h>
+#include <opencog/attentionbank/AttentionBank.h>
+#include <opencog/cogserver/server/CogServer.h>
 
 #include "WARentCollectionAgent.h"
+#include "AttentionParamQuery.h"
 
 //#define DEBUG
 
 using namespace opencog;
 
-WARentCollectionAgent::WARentCollectionAgent(CogServer& cs) : RentCollectionBaseAgent(cs)
+WARentCollectionAgent::WARentCollectionAgent(CogServer& cs):
+                       RentCollectionBaseAgent(cs), _sdac(&cs.getAtomSpace())
 {
-    _tournamentSize = config().get_int("ECAN_RENT_TOURNAMENT_SIZE", 5);
-
     // READ SLEEPING TIME HERE
+    _sti_rent = STIAtomRent;
+    _lti_rent = LTIAtomRent;
     set_sleep_time(2000);
 }
 
-Handle WARentCollectionAgent::tournamentSelect(HandleSeq population){
-    int sz = (_tournamentSize >  population.size() ? population.size() : _tournamentSize);
-
-    if (sz <= 0)
-        throw RuntimeException(TRACE_INFO,"PopulationSize must be >0");
-
-    Handle tournament[sz];
-
-    std::default_random_engine generator;
-    std::uniform_int_distribution<int> distribution(0,population.size()-1);
-
-    for(int i = 0; i < sz ; i++){
-        int idx = distribution(generator);
-        tournament[i] = population[idx];
-    }
-
-    auto result = std::max_element(tournament, tournament + (sz - 1), []
-                              (const Handle& h1, const Handle & h2)
-    {
-        return (h1->getSTI() > h2->getSTI());
-    });
-
-    return *result;
-}
-
-
 void WARentCollectionAgent::selectTargets(HandleSeq &targetSetOut)
 {
-    HandleSeq atoms;
-
-    _as->get_all_atoms(atoms);
-
-    if (atoms.size() == 0) return;
-
-    Handle h = tournamentSelect(atoms);
+    Handle h = _bank->getRandomAtom();
+    if(h == Handle::UNDEFINED)
+        return;
     targetSetOut.push_back(h);
+}
+
+void WARentCollectionAgent::collectRent(HandleSeq& targetSet)
+{
+    for (const Handle& h : targetSet) {
+        int sti = _bank->get_sti(h);
+        int lti = _bank->get_lti(h);
+        
+        float last_update_time = _sdac.elapsed_time(h);
+        STIAtomRent = STIAtomRent * last_update_time;
+        LTIAtomRent = LTIAtomRent * last_update_time;
+        
+        int stiRent = calculate_STI_Rent();
+        int ltiRent = calculate_LTI_Rent();  
+        if (stiRent > sti)
+            stiRent = sti;
+
+        if (ltiRent > lti)
+            ltiRent = lti;
+
+        _bank->set_sti(h, sti - stiRent);
+        _bank->set_lti(h, lti - ltiRent);
+    }
 }

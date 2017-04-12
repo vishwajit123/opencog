@@ -17,7 +17,7 @@
 use Getopt::Long qw(GetOptions);
 use strict;
 
-my $ver = "0.5.4";
+my $ver = "0.5.7";
 my $debug;
 my $help;
 my $version;
@@ -221,17 +221,17 @@ foreach my $af (sort @aimlFiles)
 			my $path="";
 			if ($c !~ /<topic>/)
 			{
-				my $tpat = "\<\/pattern\> \<topic\>". $topicx ."\<\/topic\> \<that\>";
-				$c =~ s/\<\/pattern\> \<that\>/$tpat/;
+				my $tpat = "\<\/pattern\> \<topic\>". $topicx ."\<\/topic\>";
+				$c =~ s/\<\/pattern\>/$tpat/;
 			}
 			my @pat = $c =~ m/\<pattern\>(.*?)\<\/pattern\>/;
 			my @top = $c =~ m/\<topic\>(.*?)\<\/topic\>/;
-			my @that  = $c =~ m/\<that\>(.*?)\<\/that\>/;
-			my @template  = $c =~ m/\<template\>(.*?)\<\/template\>/;
-			if( @pat == 0) {next;}
-			if( @template == 0) {next;}
-			if (@that == 0) { push(@that,"");}
-			if (@top == 0) { push(@top,"");}
+			my @that = $c =~ m/\<that\>(.*?)\<\/that\>/;
+			my @template = $c =~ m/\<template\>(.*?)\<\/template\>/;
+			if (@pat == 0) { next; }
+			if (@template == 0) { next; }
+			if (@that == 0) { push(@that,""); }
+			if (@top == 0) { push(@top,""); }
 
 			# Special cases.
 			#	pattern side <set>{NAME}</set> and <bot name=""/>
@@ -239,7 +239,7 @@ foreach my $af (sort @aimlFiles)
 			if (@pat >0) {$pat[0]=~ s/\<bot name/\<bot_name/gi; }
 			if (@pat >0) {$pat[0]=~ s/\<set> /<set>/gi; }
 			if (@top >0) {$top[0]=~ s/\<set> /<set>/gi; }
-			if (@that >0) {$that[0]=~ s/\<set> /<set>/gi; }#
+			if (@that >0) {$that[0]=~ s/\<set> /<set>/gi; }
 
 			if (@pat >0)  {$pat[0]=~ s/ <\/set>/<\/set>/gi; }
 			if (@top >0)  {$top[0]=~ s/ <\/set>/<\/set>/gi; }
@@ -247,7 +247,7 @@ foreach my $af (sort @aimlFiles)
 
 			my @PWRDS = split(/ /,$pat[0]);
 			my @TWRDS = split(/ /,$that[0]);
-			my @TPWRDS = split(/ /,$top[0]); #
+			my @TPWRDS = split(/ /,$top[0]);
 			my $pstars=0;
 			my $tstars=0;
 			my $topicstars=0;
@@ -499,11 +499,12 @@ sub process_star
 	$star =~ s/^\s*//;
 	$star =~ s/\s*$//;
 	$star =~ s/\\'/'/g;
-	if ($star =~ /^index='(\d+)'\s*\/>(.*)/)
+	# Handle both <star index='1'/> and <star index='1'></star>
+	if ($star =~ /^index='(\d+)'(\s*\/>|>\s*<\/star>)(.*)/)
 	{
 		$tout .= $indent . "(Glob \"\$star-$1\")\n";
 
-		my $t = $2;
+		my $t = $3;
 		$t =~ s/^\s*//;
 		$t =~ s/\s*$//;
 		if ($t ne "")
@@ -955,7 +956,7 @@ sub process_category
 	$text =~ s/\\/\\\\/g;
 
 	# strip out HTML markup. <a href> tag
-	$text =~ s/<a target=.*?>//g;
+	$text =~ s/<a (target|href)=.*?>//g;
 	$text =~ s/<\/a>//g;
 	$text =~ s/<ul>//g;
 	$text =~ s/<\/ul>//g;
@@ -968,9 +969,13 @@ sub process_category
 	$text =~ s/<\/img>//g;
 	$text =~ s/<property.*?>//g;
 	$text =~ s/<id\/>//g;
+	$text =~ s/<id>\s*<\/id>//g;
 	$text =~ s/<br\/>//g;
 	$text =~ s/<em>//g;
 	$text =~ s/<\/em>//g;
+
+	# Backward compatible with '<get_*', turn it into <get name='*'/>
+	$text =~ s/<get_(.*?)(\s*\/>|>\s*<\/get_.*?>)/<get name='$1'\/>/g;
 
 	# Trim leading and trailing whtespace.
 	$text =~ s/^\s*//;
@@ -1288,7 +1293,10 @@ while (my $line = <FIN>)
 	if (length($line) < 1) { next; }
 	my @parms = split(/\,/, $line);
 	my $cmd = $parms[0] || "";
-	my $arg = $parms[1] || "";
+
+	# To accept a pattern like this "<pattern>0</pattern>" as well
+	my $arg = ($parms[1] || $parms[1] eq 0)? $parms[1] : "";
+
 	if (length($cmd) < 1) { next; }
 
 	# Un-do the comma-damage up above.

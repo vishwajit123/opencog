@@ -22,11 +22,13 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include "ShutdownRequest.h"
-
 #include <sstream>
 
+#include <opencog/util/oc_assert.h>
 #include <opencog/cogserver/server/CogServer.h>
+#include <opencog/cogserver/server/ConsoleSocket.h>
+
+#include "ShutdownRequest.h"
 
 using namespace opencog;
 

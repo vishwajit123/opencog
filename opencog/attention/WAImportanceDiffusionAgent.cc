@@ -1,5 +1,5 @@
 /*
- * WAImportanceDiffusionAgent.cc
+ * opencog/attention/WAImportanceDiffusionAgent.cc
  *
  * Copyright (C) 2016 Opencog Foundation
  *
@@ -25,6 +25,10 @@
  */
 
 #include <opencog/util/Config.h>
+#include <opencog/atomspace/AtomSpace.h>
+#include <opencog/attention/atom_types.h>
+#include <opencog/attentionbank/AttentionBank.h>
+#include <opencog/attentionbank/StochasticImportanceDiffusion.h>
 
 #include "WAImportanceDiffusionAgent.h"
 
@@ -34,41 +38,19 @@ using namespace opencog;
 WAImportanceDiffusionAgent::WAImportanceDiffusionAgent(CogServer& cs) :
     ImportanceDiffusionBase(cs)
 {
-    _tournamentSize = config().get_int("ECAN_DIFFUSION_TOURNAMENT_SIZE", 5);
-
     set_sleep_time(300);
+}
+
+WAImportanceDiffusionAgent::~WAImportanceDiffusionAgent()
+{
 }
 
 void WAImportanceDiffusionAgent::run()
 {
+    // Read params
+    hebbianMaxAllocationPercentage =std::stod(_atq.get_param_value(
+                                     AttentionParamQuery::dif_tournament_size));
     spreadImportance();
-
-    //some sleep code
-    std::this_thread::sleep_for(std::chrono::milliseconds(get_sleep_time()));
-}
-
-Handle WAImportanceDiffusionAgent::tournamentSelect(HandleSeq population){
-    int sz = (_tournamentSize >  population.size() ? population.size() : _tournamentSize);
-
-    if (sz <= 0)
-        throw RuntimeException(TRACE_INFO,"PopulationSize must be >0");
-
-    Handle tournament[sz];
-    std::default_random_engine generator;
-    std::uniform_int_distribution<int> distribution(0,population.size()-1);
-
-    for(int i = 0; i < sz; i++){
-        int idx = distribution(generator);
-        tournament[i] = population[idx];
-    }
-
-    auto result = std::max_element(tournament, tournament + (sz - 1), []
-                              (const Handle& h1, const Handle & h2)
-    {
-        return (h1->getSTI() > h2->getSTI());
-    });
-
-    return *result;
 }
 
 /*
@@ -77,12 +59,12 @@ Handle WAImportanceDiffusionAgent::tournamentSelect(HandleSeq population){
  */
 void WAImportanceDiffusionAgent::spreadImportance()
 {
-    HandleSeq diffusionSourceVector = ImportanceDiffusionBase::diffusionSourceVector(false);
+    HandleSeq sourceVec = diffusionSourceVector();
 
-    if (diffusionSourceVector.size() == 0)
+    if (sourceVec.size() == 0)
         return;
 
-    Handle target = tournamentSelect(diffusionSourceVector);
+    Handle target = sourceVec[0];
 
     // Check the decision function to determine if spreading will occur
     diffuseAtom(target);
@@ -90,4 +72,36 @@ void WAImportanceDiffusionAgent::spreadImportance()
     // Now, process all of the outstanding diffusion events in the diffusion
     // stack
     processDiffusionStack();
+}
+
+/*
+ * Returns a vector of atom handles that will diffuse STI
+ *
+ * Calculated as all atoms in the attentional focus (nodes and links)
+ * excluding any hebbian links
+ */
+HandleSeq WAImportanceDiffusionAgent::diffusionSourceVector(void)
+{
+    Handle h = _bank->getRandomAtom();
+    
+    if(h == Handle::UNDEFINED){
+        return HandleSeq{};
+    }
+    HandleSeq sources{h};
+    removeHebbianLinks(sources);  //XXX Do wee need this?
+    return sources;
+}
+
+/*
+ * Returns the total amount of STI that the atom will diffuse
+ *
+ * Calculated as the maximum spread percentage multiplied by the atom's STI
+ */
+
+AttentionValue::sti_t WAImportanceDiffusionAgent::calculateDiffusionAmount(Handle h)
+{
+    static ecan::StochasticDiffusionAmountCalculator sdac(_as);
+    float current_estimate = sdac.diffused_value(h, maxSpreadPercentage);
+
+    return _bank->get_sti(h) - current_estimate;
 }

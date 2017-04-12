@@ -1,5 +1,5 @@
 from cython.operator cimport dereference as deref, preincrement as inc
-from opencog.atomspace cimport Atom, AtomSpace
+from opencog.atomspace cimport Atom, AtomSpace, void_from_candle
 
 cdef class OctomapOcTreeNode:
     cdef cOctomapOcTreeNode* c_node
@@ -81,10 +81,10 @@ cdef class OctomapOcTree:
         if log_odds_occupancy is None:
             log_odds_occupancy = self.c_octree_map.getOccupancyThresLog()
         cdef cHandle cblock = self.c_octree_map.getBlock(c_pos, log_odds_occupancy)
-        if (cblock.is_undefined()):
+        if (0 == void_from_candle(cblock)):
             return None
         else:
-            return Atom(cblock.value(), self.atomspace)
+            return Atom(void_from_candle(cblock), self.atomspace)
 
     def get_block_location(self, Atom atom, log_odds_occupancy = None):
         if log_odds_occupancy is None:
@@ -129,7 +129,7 @@ cdef class EntityRecorder:
         self.c_entity_recorder.removeNoneBlockEntity(deref((<Atom>atom).handle))
 
     def get_self_agent_entity(self):
-        return Atom(self.c_entity_recorder.getSelfAgentEntity().value(),self.atomspace)    
+        return Atom(void_from_candle(self.c_entity_recorder.getSelfAgentEntity()),self.atomspace)    
 
     def update_none_block_entity_location(self, Atom atom, pos, timestamp):
         assert len(pos) == 3
@@ -146,10 +146,10 @@ cdef class EntityRecorder:
         assert len(pos) == 3
         cdef cBlockVector c_pos = cBlockVector(pos[0], pos[1], pos[2])
         cdef cHandle c_handle = self.c_entity_recorder.getEntity(c_pos)
-        if (c_handle.is_undefined()):
+        if (0 == void_from_candle(c_handle)):
             return None
         else:
-            return Atom(c_handle.value(), self.atomspace)
+            return Atom(void_from_candle(c_handle), self.atomspace)
 
 def check_standable(AtomSpace atomspace, OctomapOcTree space_map, pos, log_odds_occupancy = None):
     assert len(pos) == 3

@@ -23,8 +23,10 @@
  */
 
 #include "AttentionModule.h"
+#include "AttentionParamQuery.h"
 
 #include <opencog/cogserver/server/CogServer.h>
+#include <opencog/util/Config.h>
 
 #include "opencog/attention/atom_types.definitions"
 
@@ -37,6 +39,39 @@ DECLARE_MODULE(AttentionModule)
 AttentionModule::AttentionModule(CogServer& cs) :
     Module(cs)
 {
+    init();
+    do_start_ecan_register();
+    do_stop_ecan_register();
+    do_list_ecan_param_register();
+    do_set_ecan_param_register();
+}
+
+AttentionModule::~AttentionModule()
+{
+    logger().debug("[AttentionModule] enter destructor");
+
+    _cogserver.unregisterAgent(AFImportanceDiffusionAgent::info().id);
+    _cogserver.unregisterAgent(WAImportanceDiffusionAgent::info().id);
+
+    _cogserver.unregisterAgent(ForgettingAgent::info().id);
+    _cogserver.unregisterAgent(FocusBoundaryUpdatingAgent::info().id);
+    _cogserver.unregisterAgent(HebbianUpdatingAgent::info().id);
+    _cogserver.unregisterAgent(HebbianCreationAgent::info().id);
+
+    do_start_ecan_unregister();
+    do_stop_ecan_unregister();
+    do_list_ecan_param_unregister();
+    do_set_ecan_param_unregister();
+
+    addAFConnection.disconnect();
+
+    logger().debug("[AttentionModule] exit destructor");
+}
+
+void AttentionModule::init()
+{
+    AttentionParamQuery _atq(&_cogserver.getAtomSpace());
+    _atq.load_default_values(); // Load default ECAN param values into AS
     // New Thread based ECAN agents.
     _cogserver.registerAgent(AFImportanceDiffusionAgent::info().id, &afImportanceFactory);
     _cogserver.registerAgent(WAImportanceDiffusionAgent::info().id, &waImportanceFactory);
@@ -45,15 +80,12 @@ AttentionModule::AttentionModule(CogServer& cs) :
     _cogserver.registerAgent(WARentCollectionAgent::info().id, &waRentFactory);
 
     _cogserver.registerAgent(ForgettingAgent::info().id,          &forgettingFactory);
-    _cogserver.registerAgent(MinMaxSTIUpdatingAgent::info().id,&minMaxSTIUpdatingFactory);
     _cogserver.registerAgent(HebbianCreationAgent::info().id,&hebbianCreationFactory);
     _cogserver.registerAgent(FocusBoundaryUpdatingAgent::info().id,&focusUpdatingFactory);
     _cogserver.registerAgent(HebbianUpdatingAgent::info().id,&hebbianUpdatingFactory);
 
     _forgetting_agentptr =
         _cogserver.createAgent(ForgettingAgent::info().id, false);
-    _minmaxstiupdating_agentptr =
-        _cogserver.createAgent(MinMaxSTIUpdatingAgent::info().id,false);
     _hebbiancreation_agentptr =
         _cogserver.createAgent(HebbianCreationAgent::info().id,false);
     _focusupdating_agentptr =
@@ -68,34 +100,9 @@ AttentionModule::AttentionModule(CogServer& cs) :
     _waRentAgentPtr = _cogserver.createAgent(WARentCollectionAgent::info().id, false);
 
 
-     addAFConnection =_cogserver.getAtomSpace().AddAFSignal(
-                       boost::bind(&AttentionModule::addAFSignalHandler,
-                                   this, _1, _2, _3));
-    do_start_ecan_register();
-}
-
-AttentionModule::~AttentionModule()
-{
-    logger().debug("[AttentionModule] enter destructor");
-
-    _cogserver.unregisterAgent(AFImportanceDiffusionAgent::info().id);
-    _cogserver.unregisterAgent(WAImportanceDiffusionAgent::info().id);
-
-    _cogserver.unregisterAgent(ForgettingAgent::info().id);
-    _cogserver.unregisterAgent(MinMaxSTIUpdatingAgent::info().id);
-    _cogserver.unregisterAgent(FocusBoundaryUpdatingAgent::info().id);
-    _cogserver.unregisterAgent(HebbianUpdatingAgent::info().id);
-    _cogserver.unregisterAgent(HebbianCreationAgent::info().id);
-
-    do_start_ecan_unregister();
-
-    addAFConnection.disconnect();
-
-    logger().debug("[AttentionModule] exit destructor");
-}
-
-void AttentionModule::init()
-{
+    addAFConnection = _cogserver.getAttentionBank().AddAFSignal().connect(
+            boost::bind(&AttentionModule::addAFSignalHandler,
+                this, _1, _2, _3));
 }
 
 std::string AttentionModule::do_start_ecan(Request *req, std::list<std::string> args)
@@ -112,16 +119,56 @@ std::string AttentionModule::do_start_ecan(Request *req, std::list<std::string> 
     _cogserver.startAgent(_afRentAgentPtr, true, afRent);
     _cogserver.startAgent(_waRentAgentPtr, true, waRent);
 
-    _cogserver.startAgent(_forgetting_agentptr,true,"attention");
-    _cogserver.startAgent(_minmaxstiupdating_agentptr,true,"attention");
+   // _cogserver.startAgent(_forgetting_agentptr,true,"attention");
     _cogserver.startAgent(_focusupdating_agentptr,true,"attention");
 
-    _cogserver.startAgent(_hebbiancreation_agentptr,true,"hca");
-    _cogserver.startAgent(_hebbianupdating_agentptr,true,"hua");
+   // _cogserver.startAgent(_hebbiancreation_agentptr,true,"hca");
+   // _cogserver.startAgent(_hebbianupdating_agentptr,true,"hua");
 
     return ("Started the following agents:\n" + afImportance + "\n" + waImportance +
-         "\n" + afRent + "\n" + waRent + "\n");
+           "\n" + afRent + "\n" + waRent + "\n");
 }
+
+std::string AttentionModule::do_stop_ecan(Request *req, std::list<std::string> args)
+{
+    _cogserver.stopAgent(_afImportanceAgentPtr);
+    _cogserver.stopAgent(_waImportanceAgentPtr);
+
+    _cogserver.stopAgent(_afRentAgentPtr);
+    _cogserver.stopAgent(_waRentAgentPtr);
+
+    _cogserver.stopAgent(_forgetting_agentptr);
+    _cogserver.stopAgent(_focusupdating_agentptr);
+
+    _cogserver.stopAgent(_hebbiancreation_agentptr);
+    _cogserver.stopAgent(_hebbianupdating_agentptr);
+
+    return "Stopped ECAN agents.\n";
+}
+
+std::string AttentionModule::do_list_ecan_param(Request *req, std::list<std::string> args)
+{
+    std::string response = "";
+    AttentionParamQuery _atq(&_cogserver.getAtomSpace());
+    HandleSeq hseq = _atq.get_params();
+    for(const Handle& h : hseq){
+        std::string param = h->getName();
+        response += param + "= " + _atq.get_param_value(param) + "\n"; 
+    }
+    return response;
+}
+
+std::string AttentionModule::do_set_ecan_param(Request *req, std::list<std::string> args)
+{
+    AttentionParamQuery _atq(&_cogserver.getAtomSpace());
+    auto it = args.begin();
+    std::string param = *it;
+    std::advance(it,1);
+    _atq.set_param(param, *it);
+
+   return param+"= "+_atq.get_param_value(param)+"\n";
+}
+
 
 /*
  * When an atom enters the AttentionalFocus, it is added to a concurrent_queue

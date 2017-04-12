@@ -23,51 +23,68 @@
 
 (load "formulas.scm")
 
-;; Generate the corresponding deduction rule given its link-type.
-(define (gen-deduction-rule link-type)
-    (BindLink
-        (VariableList
-            (VariableNode "$A")
-            (VariableNode "$B")
-            (VariableNode "$C"))
-        (AndLink
-            (link-type
-                (VariableNode "$A")
-                (VariableNode "$B"))
-            (link-type
-                (VariableNode "$B")
-                (VariableNode "$C"))
-            (NotLink
-                (EqualLink
-                    (VariableNode "$A")
-                    (VariableNode "$C")
-                )))
-        (ExecutionOutputLink
-            (GroundedSchemaNode "scm: deduction-formula")
-            (ListLink
-                (link-type
-                    (VariableNode "$A")
-                    (VariableNode "$B"))
-                (link-type
-                    (VariableNode "$B")
-                    (VariableNode "$C"))
-                (link-type
-                    (VariableNode "$A")
-                    (VariableNode "$C"))))))
-
+;; Generate the corresponding deduction rule given its link-type and
+;; the type for each variable (the same for all 3).
+(define (gen-deduction-rule link-type var-type)
+  (let* ((A (Variable "$A"))
+         (B (Variable "$B"))
+         (C (Variable "$C"))
+         (AB (link-type A B))
+         (BC (link-type B C))
+         (AC (link-type A C)))
+    (Bind
+      (VariableList
+        (TypedVariable A var-type)
+        (TypedVariable B var-type)
+        (TypedVariable C var-type))
+      (And
+        AB
+        BC
+        (Not (Identical A C)))
+      (ExecutionOutput
+        (GroundedSchema "scm: deduction-formula")
+          (List
+            ;; Conclusion
+            AC
+            ;; Premises
+            ;;
+            ;; TODO: perhaps A, B, C should be added as premises as
+            ;; they are used in the formula.
+            AB
+            BC)))))
 
 (define deduction-inheritance-rule
-    (gen-deduction-rule InheritanceLink))
+  (let ((var-type (TypeChoice
+                    (TypeNode "ConceptNode")
+                    (TypeNode "AndLink")
+                    (TypeNode "OrLink")
+                    (TypeNode "NotLink"))))
+    (gen-deduction-rule InheritanceLink var-type)))
 
 (define deduction-implication-rule
-    (gen-deduction-rule ImplicationLink))
+  (let ((var-type (TypeChoice
+                    (TypeNode "PredicateNode")
+                    (TypeNode "LambdaLink")
+                    (TypeNode "AndLink")
+                    (TypeNode "OrLink")
+                    (TypeNode "NotLink"))))
+    (gen-deduction-rule ImplicationLink var-type)))
 
 (define deduction-subset-rule
-    (gen-deduction-rule SubsetLink))
+  (let ((var-type (TypeChoice
+                    (TypeNode "ConceptNode")
+                    (TypeNode "AndLink")
+                    (TypeNode "OrLink")
+                    (TypeNode "NotLink"))))
+    (gen-deduction-rule SubsetLink var-type)))
 
-(define (deduction-formula AB BC AC)
+(define (deduction-formula conclusion . premises)
+  (if (= (length premises) 2)
     (let*
-        ((sA (cog-stv-strength (gar AB)))
+        ((AC conclusion)
+         (AB (list-ref premises 0))
+         (BC (list-ref premises 1))
+         (sA (cog-stv-strength (gar AB)))
          (cA (cog-stv-confidence (gar AB)))
          (sB (cog-stv-strength (gar BC)))
          (cB (cog-stv-confidence (gar BC)))
@@ -96,7 +113,7 @@
               ;; TV. This covers the case where B fully confidently
               ;; tends to 1. See formulas.scm Simple Deduction
               ;; Formula comment for more explanations. This
-              ;; overlaps with the implication-construction-rule.
+              ;; overlaps with the implication-introduction-rule.
               (let ((sAC sC)
                     (cAC (* alpha cA cC)))
                 (if (and (< 1e-8 sAC) (< 1e-8 cAC)) ;; Don't create zero
@@ -134,7 +151,7 @@
                                               ;; situation.
                     (cog-merge-hi-conf-tv! AC (stv sAC cAC))
                     (cog-undefined-handle))))
-          (cog-undefined-handle))))
+          (cog-undefined-handle)))))
 
 ;; Name the rules
 (define deduction-inheritance-rule-name

@@ -19,11 +19,12 @@
 (use-modules (opencog))
 (use-modules (opencog rule-engine))
 
-;XXX This is bad and broken and wrong; one should not try to bypass the
-; scheme module system like this, its just asking for carpet burns.
-(load-from-path "utilities.scm")
-(load-from-path "av-tv.scm")
-(load-from-path "opencog/rule-engine/rule-engine-utils.scm")
+;; TODO Maybe we can remove that definitely?
+;; ;XXX This is bad and broken and wrong; one should not try to bypass the
+;; ; scheme module system like this, its just asking for carpet burns.
+;; (load-from-path "utilities.scm")
+;; (load-from-path "av-tv.scm")
+;; (load-from-path "opencog/rule-engine/rule-engine-utils.scm")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Define PLN rule-based system ;;
@@ -36,8 +37,8 @@
 )
 
 ;; Define pln-fc and pln-bc for convenience 
-(define (pln-fc source) (cog-fc source pln-rbs (SetLink)))
-(define (pln-bc target) (cog-bc target pln-rbs (SetLink)))
+(define (pln-fc source) (cog-fc pln-rbs source (List) (Set)))
+(define (pln-bc target) (cog-bc pln-rbs target (List) (Set)))
 
 ;;;;;;;;;;;;;;;;
 ;; Load rules ;;
@@ -48,16 +49,16 @@
 (define (append-rule-dir basename) (string-append pln-rules-dir basename))
 (define rule-basenames
   (list "implication-instantiation-rule.scm"
-        "implication-scope-distribution-rule.scm"
-        "equivalence-to-double-implication-rule.scm"
-        "lambda-predicate-construction-rule.scm"
+        "implication-scope-to-implication-rule.scm"
+        "equivalence-to-implication-rule.scm"
+        "predicate-lambda-evaluation-rule.scm"
         "inversion-rule.scm"
         "implication-implicant-conjunction-rule.scm"
         "and-lambda-factorization-double-implication-rule.scm"
         "deduction-rule.scm"
-        "implication-scope-factorization-rule.scm"
+        "implication-to-implication-scope-rule.scm"
         "equivalence-scope-distribution-rule.scm"
-        "and-construction-rule.scm"
+        "and-introduction-rule.scm"
         )
   )
 (define rule-files (map append-rule-dir rule-basenames))
@@ -69,17 +70,17 @@
 
 ; List the rules and their weights.
 (define rules
-  (list (list implication-scope-distribution-rule-name 1)
+  (list (list implication-scope-to-implication-rule-name 1)
         (list implication-full-instantiation-rule-name 1)
-        (list equivalence-to-double-implication-rule-name 1)
-        (list lambda-predicate-construction-rule-name 1)
+        (list equivalence-to-implication-rule-name 1)
+        (list lambda-predicate-evaluation-rule-name 1)
         (list inversion-implication-rule-name 1)
         (list implication-implicant-conjunction-rule-name 1)
         (list and-lambda-factorization-double-implication-rule-name 1)
         (list deduction-implication-rule-name 1)
-        (list implication-scope-factorization-rule-name 1)
+        (list implication-to-implication-scope-rule-name 1)
         (list equivalence-scope-distribution-rule-name 1)
-        (list and-construction-grounded-evaluation-rule-name 1)
+        (list and-introduction-grounded-evaluation-rule-name 1)
         )
   )
 

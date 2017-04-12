@@ -23,6 +23,7 @@
 #ifndef _OPENCOG_AFRENT_COLLECTION_AGENT_H
 #define _OPENCOG_AFRENT_COLLECTION_AGENT_H
 
+#include <chrono>
 #include <string>
 #include <iostream>
 #include <sstream>
@@ -35,6 +36,8 @@
 #include <opencog/cogserver/server/Agent.h>
 
 #include "RentCollectionBaseAgent.h"
+
+using namespace std::chrono;
 
 namespace opencog {
     /** \addtogroup grp_attention
@@ -51,23 +54,25 @@ namespace opencog {
      * This Agent is supposed to run in it's own Thread.
      */
     class AFRentCollectionAgent : public RentCollectionBaseAgent {
-    private:
+        private:
+            time_point<high_resolution_clock> last_update;
+            float update_cycle;
 
+        public:
 
-    public:
+            virtual const ClassInfo& classinfo() const {
+                return info();
+            }
 
-        virtual const ClassInfo& classinfo() const {
-            return info();
-        }
+            static const ClassInfo& info() {
+                static const ClassInfo _ci("opencog::AFRentCollectionAgent");
+                return _ci;
+            }
 
-        static const ClassInfo& info() {
-            static const ClassInfo _ci("opencog::AFRentCollectionAgent");
-            return _ci;
-        }
-
-        AFRentCollectionAgent(CogServer&);
-        virtual ~AFRentCollectionAgent();
-        virtual void selectTargets(HandleSeq &targetSetOut);
+            AFRentCollectionAgent(CogServer&);
+            virtual ~AFRentCollectionAgent();
+            virtual void selectTargets(HandleSeq &targetSetOut);
+            void collectRent(HandleSeq& targetSet);
     }; // class
 
     /** @}*/

@@ -4,7 +4,6 @@
 
 ;-------------------------------------------------------------------------------
 ; Define the demands
-
 (define sociality (psi-demand "Sociality" .8))
 
 ;-------------------------------------------------------------------------------
@@ -35,9 +34,7 @@
             (SequentialOr
                 (Not (DefinedPredicate "input-is-a-question?"))
                 (DefinedPredicate "fuzzy-reply-is-declarative?"))
-            (SequentialOr
-                (DefinedPredicate "is-fuzzy-reply-good?")
-                (DefinedPredicate "no-other-fast-reply?"))
+            (DefinedPredicate "no-other-fast-reply?")
             (DefinedPredicate "has-not-replied-anything-yet?")
         ))
         (True (ExecutionOutput (GroundedSchema "scm: reply") (List fuzzy-reply)))
@@ -55,9 +52,7 @@
             (DefinedPredicate "is-fuzzy-reply?")
             (DefinedPredicate "input-is-a-question?")
             (Not (DefinedPredicate "fuzzy-reply-is-declarative?"))
-            (SequentialOr
-                (DefinedPredicate "is-fuzzy-reply-good?")
-                (DefinedPredicate "no-good-fast-answer?"))
+            (DefinedPredicate "no-good-fast-answer?")
             (DefinedPredicate "has-not-replied-anything-yet?")
         ))
         (True (ExecutionOutput (GroundedSchema "scm: reply") (List fuzzy-reply)))
@@ -79,7 +74,7 @@
         ))
         (True (ExecutionOutput (GroundedSchema "scm: call-aiml") (List)))
         (True)
-        (stv .9 .9)
+        (stv 0 .9)
         sociality
         "aiml"
     )
@@ -97,7 +92,7 @@
         ))
         (True (ExecutionOutput (GroundedSchema "scm: reply") (List aiml-reply)))
         (True)
-        (stv .9 .9)
+        (stv 0 .9)
         sociality
         "aiml"
     )
@@ -117,9 +112,103 @@
         ))
         (True (ExecutionOutput (GroundedSchema "scm: reply") (List aiml-reply)))
         (True)
-        (stv .9 .9)
+        (stv 0 .9)
         sociality
         "aiml"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "chatscript-not-started?")
+            (DefinedPredicate "is-input-utterance?")
+            (Not (DefinedPredicate "asking-how-robot-feels?"))
+            (SequentialOr
+                (Not (DefinedPredicate "input-type-is-imperative?"))
+                (DefinedPredicate "don't-know-how-to-do-it?"))
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: call-chatscript") (List)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "chatscript"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "chatscript-finished?")
+            (DefinedPredicate "is-chatscript-reply?")
+            (SequentialOr
+                (DefinedPredicate "input-is-about-the-robot?")
+                (Not (DefinedPredicate "input-is-a-question?")))
+            (DefinedPredicate "no-random-sentence-generator-keywords?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List chatscript-reply)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "chatscript"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "chatscript-finished?")
+            (DefinedPredicate "is-chatscript-reply?")
+            (SequentialOr
+                (DefinedPredicate "input-is-about-the-robot?")
+                (Not (DefinedPredicate "input-is-a-question?")))
+            (DefinedPredicate "has-random-sentence-generator-done-with-the-keywords?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List chatscript-reply)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "chatscript"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "chatscript-finished?")
+            (DefinedPredicate "is-chatscript-reply?")
+            (DefinedPredicate "input-is-a-question?")
+            (Not (DefinedPredicate "input-is-about-the-robot?"))
+            (DefinedPredicate "no-good-fast-answer?")
+            (DefinedPredicate "no-random-sentence-generator-keywords?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List chatscript-reply)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "chatscript"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "chatscript-finished?")
+            (DefinedPredicate "is-chatscript-reply?")
+            (DefinedPredicate "input-is-a-question?")
+            (Not (DefinedPredicate "input-is-about-the-robot?"))
+            (DefinedPredicate "no-good-fast-answer?")
+            (DefinedPredicate "has-random-sentence-generator-done-with-the-keywords?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List chatscript-reply)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "chatscript"
     )
 )
 
@@ -223,6 +312,38 @@
 (psi-set-controlled-rule
     (psi-rule
         (list (SequentialAnd
+            (DefinedPredicate "is-openweathermap-ready?")
+            (DefinedPredicate "openweathermap-not-started?")
+            (DefinedPredicate "is-input-utterance?")
+            (DefinedPredicate "is-weather-related?")
+            (DefinedPredicate "input-type-is-interrogative?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: ask-weather") (List)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "openweathermap"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "openweathermap-finished?")
+            (DefinedPredicate "is-openweathermap-answer?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List openweathermap-answer)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "openweathermap"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
             (DefinedPredicate "is-random-pkd-sentence-generator-ready?")
             (DefinedPredicate "random-pkd-sentence-generator-not-started?")
             (DefinedPredicate "is-input-utterance?")
@@ -252,9 +373,28 @@
         ))
         (True (ExecutionOutput (GroundedSchema "scm: call-random-sentence-generator") (List (Node "blogs"))))
         (True)
-        (stv .9 .9)
+        (stv 0 .9)
         sociality
         "random_sentence_blogs"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "is-random-kurzweil-sentence-generator-ready?")
+            (DefinedPredicate "random-kurzweil-sentence-generator-not-started?")
+            (DefinedPredicate "is-input-utterance?")
+            (DefinedPredicate "has-kurzweil-related-words?")
+            (SequentialOr
+                (Not (DefinedPredicate "input-type-is-imperative?"))
+                (DefinedPredicate "don't-know-how-to-do-it?"))
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: call-random-sentence-generator") (List (Node "kurzweil"))))
+        (True)
+        (stv .9 .9)
+        sociality
+        "random_sentence_kurzweil"
     )
 )
 
@@ -280,9 +420,23 @@
         ))
         (True (ExecutionOutput (GroundedSchema "scm: reply") (List random-blogs-sentence-generated)))
         (True)
-        (stv .9 .9)
+        (stv 0 .9)
         sociality
         "random_sentence_blogs"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "random-kurzweil-sentence-generated?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List random-kurzweil-sentence-generated)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "random_sentence_kurzweil"
     )
 )
 
@@ -313,4 +467,65 @@
         sociality
         "chatbot_eva"
     )
+)
+
+; Emotion state inquiry
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+           (DefinedPredicate "emotion-state-not-started?")
+           (DefinedPredicate "is-input-utterance?")
+           ;(DefinedPredicate "input-is-a-question?")
+           (DefinedPredicate "asking-how-robot-feels?")
+        ))
+        (True (ExecutionOutput
+                (GroundedSchema "scm: call-emotion-state-response") (List)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "emotion_state"
+    )
+)
+
+(psi-set-controlled-rule
+    (psi-rule
+        (list (SequentialAnd
+            (DefinedPredicate "emotion-state-finished?")
+            (DefinedPredicate "is-emotion-state-reply?")
+            (DefinedPredicate "has-not-replied-anything-yet?")
+        ))
+        (True (ExecutionOutput (GroundedSchema "scm: reply") (List emotion-state-reply)))
+        (True)
+        (stv .9 .9)
+        sociality
+        "emotion-state"
+    )
+)
+
+(psi-rule
+    (list (SequentialAnd
+        (DefinedPredicate "is-input-utterance?")
+        (DefinedPredicate "input-type-is-interrogative?")
+        (DefinedPredicate "is-asking-about-how-many-visible-faces")
+        (DefinedPredicate "has-not-replied-anything-yet?")
+    ))
+    (True (ExecutionOutput (GroundedSchema "scm: count-and-reply")
+        (List (DefinedSchema "Num visible faces"))))
+    (True)
+    (stv .9 .9)
+    sociality
+)
+
+; Return to normal if someone says e.g. "we are done showing it" when it's in
+; a demo mode
+(psi-rule
+    (list (SequentialAnd
+        (DefinedPredicate "is-input-utterance?")
+        (DefinedPredicate "is-in-any-demo-mode?")
+        (DefinedPredicate "is-asked-to-stop-demo?")
+    ))
+    (True (ExecutionOutput (GroundedSchema "scm: back-to-default-mode") (List)))
+    (True)
+    (stv .9 .9)
+    sociality
 )

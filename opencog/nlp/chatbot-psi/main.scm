@@ -22,6 +22,7 @@
 (load "external-sources.scm")
 (load "random-sentence-generator.scm")
 (load "pln-actions.scm")
+(load "chatscript.scm")
 
 ; Load the psi-rules
 (load "psi-rules.scm")
@@ -32,9 +33,6 @@
 
 ; Load pln reasoner
 (load "pln-reasoner.scm")
-
-; Load demo configuration files.
-(load "demo.scm")
 
 ; Set relex-server-host
 ; (use-relex-server "localhost" 4444)
@@ -48,14 +46,18 @@
     (reset-all-chatbot-states)
 
     (let ((sent-node (car (nlp-parse utterance))))
-        ; This is for keeping track of whether we have input that has not
-        ; been handled
-        (State input-utterance sent-node)
-
         ; These are for the contexts
         (State input-utterance-sentence sent-node)
         (State input-utterance-text (Node utterance))
         (State input-utterance-words (get-word-list sent-node))
+
+        ; This is for keeping track of whether we have input that has not
+        ; been handled
+        ; This set (DefinedPredicate "is-input-utterance?") to be true,
+        ; doing this after updating the above states so as to make sure
+        ; atoms that some chat-related rules are expecting will be created
+        ; before the rules get evaluated
+        (State input-utterance sent-node)
     )
 
     *unspecified*
@@ -68,11 +70,3 @@
 ; loading the aiml psi-rules
 (define aiml-chat-demand (psi-demand "AIML chat demand" .8))
 (psi-demand-skip aiml-chat-demand)
-(psi-reset-valid-demand-cache)
-
-;-------------------------------------------------------------------------------
-; Run OpenPsi if it's not already running
-
-(if (not (psi-running?))
-    (psi-run)
-)

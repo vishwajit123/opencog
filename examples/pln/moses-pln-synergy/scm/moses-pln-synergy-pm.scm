@@ -8,7 +8,7 @@
 (load "background-knowledge.scm")
 
 ;; Load the PLN configuration for this demo
-(load "pln-config.scm")
+(load "pln-fc-config.scm")
 
 ;; Apply the inference rules using the pattern matcher. This only
 ;; contains the executions, see the README.md for the explanations and
@@ -19,16 +19,16 @@
           (iota 2))
 
 ;; (2)
-(cog-bind implication-scope-distribution-rule)
+(cog-bind implication-scope-to-implication-rule)
 
 ;; (3)
 (cog-bind and-lambda-distribution-rule)
 
 ;; (4)
-(cog-bind lambda-grounded-construction-rule)
+(cog-bind closed-lambda-evaluation-rule)
 
 ;; (5)
-(cog-bind implication-construction-rule)
+(cog-bind implication-introduction-rule)
 
 ;; (6)
 (cog-bind implication-implicant-distribution-rule)
@@ -46,7 +46,7 @@
 (cog-bind implication-full-instantiation-rule)
 
 ;; (11)
-(cog-bind (ure-get-forward-rule equivalence-to-double-implication-rule))
+(cog-bind equivalence-to-implication-rule)
 
 ;; (12)
 (cog-bind deduction-implication-rule)

@@ -39,13 +39,13 @@ DistributedPatternMinerClientModule::DistributedPatternMinerClientModule(CogServ
 
 DistributedPatternMinerClientModule::~DistributedPatternMinerClientModule()
 {
-    logger().info("[TestPatternMinerModule] destructor");
+    logger().info("[PatternMinerModule] destructor");
     _cogserver.stopAllAgents(DistributedPatternMinerClient::info().id);
 }
 
 void DistributedPatternMinerClientModule::init()
 {
-    logger().info("[TestPatternMinerModule] init");
+    logger().info("[PatternMinerModule] init");
     _cogserver.registerAgent(DistributedPatternMinerClient::info().id, &factory);
     _cogserver.createAgent(DistributedPatternMinerClient::info().id, true);
 }
@@ -63,7 +63,7 @@ DistributedPatternMinerClient::DistributedPatternMinerClient(CogServer& cs) : Ag
 //                        "pm_test_corpus.scm"
 //                      );
 
-    this->patternMiner = new PatternMiner(&(cs.getAtomSpace()));
+    this->patternMiner = new DistributedPatternMiner(&(cs.getAtomSpace()));
 
     logger().info("[DistributedPatternMinerClient] constructor");
 

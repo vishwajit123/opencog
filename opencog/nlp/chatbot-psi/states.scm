@@ -34,6 +34,11 @@
 (State aiml default-state)
 (State aiml-reply default-state)
 
+(define chatscript (Anchor (chat-prefix "ChatScript")))
+(define chatscript-reply (Anchor (chat-prefix "ChatScriptReply")))
+(State chatscript default-state)
+(State chatscript-reply default-state)
+
 (define fuzzy (Anchor (chat-prefix "Fuzzy")))
 (define fuzzy-reply (Anchor (chat-prefix "FuzzyReply")))
 (define fuzzy-reply-type (Anchor (chat-prefix "FuzzyReplyType")))
@@ -53,15 +58,24 @@
 (State wolframalpha setup-not-done)  ; An AppID is required to use WolframAlpha
 (State wolframalpha-answer default-state)
 
+(define openweathermap (Anchor (chat-prefix "OpenWeatherMap")))
+(define openweathermap-answer (Anchor (chat-prefix "OpenWeatherMapAnswer")))
+(State openweathermap setup-not-done)  ; An AppID is required to use OpenWeatherMap
+(State openweathermap-answer default-state)
+
 (define random-pkd-sentence-generator (Anchor (chat-prefix "RandomPKDSentenceGenerator")))
 (define random-blogs-sentence-generator (Anchor (chat-prefix "RandomBlogsSentenceGenerator")))
+(define random-kurzweil-sentence-generator (Anchor (chat-prefix "RandomBlogsSentenceGenerator")))
 (define random-pkd-sentence-generated (Anchor (chat-prefix "RandomPKDSentenceGenerated")))
 (define random-blogs-sentence-generated (Anchor (chat-prefix "RandomBlogsSentenceGenerated")))
+(define random-kurzweil-sentence-generated (Anchor (chat-prefix "RandomBlogsSentenceGenerated")))
 ; Need to do (markov-setup ...) once for both generators
 (State random-pkd-sentence-generator setup-not-done)
 (State random-blogs-sentence-generator setup-not-done)
+(State random-kurzweil-sentence-generator setup-not-done)
 (State random-pkd-sentence-generated default-state)
 (State random-blogs-sentence-generated default-state)
+(State random-kurzweil-sentence-generated default-state)
 
 (define chatbot-eva (Anchor (chat-prefix "ChatbotEva")))
 (define chatbot-eva-action (Anchor (chat-prefix "ChatbotEvaAction")))
@@ -74,7 +88,11 @@
 (define pln-inferred-atoms (Anchor (chat-prefix "PLNInferredAtoms")))
 (State pln-answers default-state)
 (State pln-qa default-state)
-(State pln-inferred-atoms default-state) ;; should not be reset
+
+(define emotion-state (Anchor (chat-prefix "EmotionState")))
+(define emotion-state-reply (Anchor (chat-prefix "EmotionStateReply")))
+(State emotion-state default-state)
+(State emotion-state-reply default-state)
 
 ;-------------------------------------------------------------------------------
 
@@ -82,6 +100,8 @@
     (State input-utterance no-input-utterance)
     (State aiml default-state)
     (State aiml-reply default-state)
+    (State chatscript default-state)
+    (State chatscript-reply default-state)
     (State fuzzy default-state)
     (State fuzzy-reply default-state)
     (State fuzzy-reply-type default-state)
@@ -91,13 +111,20 @@
     (if has-wolframalpha-setup
         (State wolframalpha default-state))
     (State wolframalpha-answer default-state)
+    (if has-openweathermap-setup
+        (State openweathermap default-state))
+    (State openweathermap-answer default-state)
     (if has-markov-setup (begin
         (State random-pkd-sentence-generator default-state)
-        (State random-blogs-sentence-generator default-state)))
+        (State random-blogs-sentence-generator default-state)
+        (State random-kurzweil-sentence-generator default-state)))
     (State random-pkd-sentence-generated default-state)
     (State random-blogs-sentence-generated default-state)
+    (State random-kurzweil-sentence-generated default-state)
     (State chatbot-eva default-state)
     (State chatbot-eva-action default-state)
     (State pln-answers default-state)
     (State pln-qa default-state)
+    (State emotion-state default-state)
+    (State emotion-state-reply default-state)
 )

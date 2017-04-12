@@ -23,6 +23,7 @@
 ; -- sentence-get-utterance-type  Get the speech act of a sentence.
 ; -- sent-list-get-parses   Get parses of a list of sentences.
 ; -- sent-get-words-in-order  Get all words occuring in a sentence in order.
+; -- sent-get-interp Get all the InterpretationNodes of a sentence.
 ; -- parse-get-words        Get all words occuring in a parse.
 ; -- parse-get-words-in-order  Get all words occuring in a parse in order.
 ; -- parse-get-relations    Get all RelEx relations in a parse.
@@ -219,6 +220,14 @@
 )
 
 ; ---------------------------------------------------------------------
+(define-public (sent-get-interp sent-node)
+"
+  sent-get-interp - Given a SentenceNode returns a list of InterpretationNodes
+"
+    (parse-get-interp (car (sentence-get-parses sent-node)))
+)
+
+; ---------------------------------------------------------------------
 (define-public (parse-get-words parse-node)
 "
   parse-get-words - Given a parse, return a list of all words in the parse
@@ -273,25 +282,58 @@
   Given a parse, returns a list of RelEx outputs associated with
   the ParseNode.
 "
-    (let* ((sent-node (car (cog-chase-link 'ParseLink 'SentenceNode parse-node)))
-           (sent-incoming-set (cog-incoming-set sent-node))
-           (word-inst-nodes (parse-get-words parse-node))
-           (relex-relations (concatenate (map word-inst-get-relations word-inst-nodes)))
-           (word-incoming-set (concatenate (map cog-incoming-set word-inst-nodes)))
-           (eval-lglin-links (concatenate (map (lambda(x) (cog-get-pred x 'LgLinkInstanceNode)) word-inst-nodes)))
-           (eval-lgrn-links (concatenate (map (lambda(x) (cog-get-pred x 'LinkGrammarRelationshipNode)) word-inst-nodes)))
-           (lg-incoming-set (concatenate (map cog-incoming-set (map (lambda(x) (car (cog-outgoing-set x))) eval-lglin-links)))))
+    (define parse-link (cog-incoming-by-type parse-node 'ParseLink))
+    (define sent-node (gdr (car parse-link)))
+    (define sent-seq-link (cog-incoming-by-type sent-node 'SentenceSequenceLink))
 
-        (delete-duplicates!
-            (append
-                sent-incoming-set
-                relex-relations
-                word-incoming-set
-                lg-incoming-set
-                eval-lgrn-links
-            )
-        )
-    )
+    (define word-inst-links (cog-incoming-by-type parse-node 'WordInstanceLink))
+    (define word-inst-nodes (map gar word-inst-links))
+    (define word-seq-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'WordSequenceLink)) word-inst-nodes))
+    (define pos-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'PartOfSpeechLink)) word-inst-nodes))
+    (define lemma-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'LemmaLink)) word-inst-nodes))
+    (define tense-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'TenseLink)) word-inst-nodes))
+    (define inherit-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'InheritanceLink)) word-inst-nodes))
+    (define ref-win (filter (lambda (l)
+        (equal? (cog-type (gdr l)) 'WordNode)) (append-map
+            (lambda (n) (cog-incoming-by-type n 'ReferenceLink)) word-inst-nodes)))
+
+    (define eval-dlrn (append-map (lambda (n)
+        (cog-get-pred n 'DefinedLinguisticRelationshipNode)) word-inst-nodes))
+    (define eval-lgrn (append-map (lambda (n)
+        (cog-get-pred n 'LinkGrammarRelationshipNode)) word-inst-nodes))
+    (define eval-lgin (append-map (lambda (n)
+        (cog-get-pred n 'LgLinkInstanceNode)) word-inst-nodes))
+
+    (define lg-inst-nodes (map gar eval-lgin))
+    (define lg-word-cset (append-map (lambda (n)
+        (cog-incoming-by-type n 'LgWordCset)) word-inst-nodes))
+    (define ref-lgin (append-map (lambda (n)
+        (cog-incoming-by-type n 'ReferenceLink)) lg-inst-nodes))
+    (define lg-link-inst-link (append-map (lambda (n)
+        (cog-incoming-by-type n 'LgLinkInstanceLink)) lg-inst-nodes))
+
+    (delete-duplicates (append
+        parse-link
+        sent-seq-link
+        word-inst-links
+        word-seq-link
+        pos-link
+        lemma-link
+        tense-link
+        inherit-link
+        ref-win
+        eval-dlrn
+        eval-lgrn
+        eval-lgin
+        ref-lgin
+        lg-word-cset
+        lg-link-inst-link
+    ))
 )
 
 ; --------------------------------------------------------------------
@@ -311,6 +353,16 @@
 )
 
 ; --------------------------------------------------------------------
+(define-public (parse-get-interp parse-node)
+"
+  parse-get-interp    Get the interpretations of the parse.
+
+  Returns the InterpretationNodes associated with a ParseNode.
+"
+    (cog-chase-link 'InterpretationLink 'InterpretationNode parse-node)
+)
+
+; --------------------------------------------------------------------
 (define-public (interp-get-r2l-outputs interp-node)
 "
   interp-get-r2l-outputs    Get all R2L outputs in an Interpretation.
@@ -324,7 +376,7 @@
 ; --------------------------------------------------------------------
 (define-public (interp-get-parse interp)
 "
-  interp-get-parse    Get the Interpretation of a Parse.
+  interp-get-parse    Get the parse that resulted in the given interpretation.
 
   Returns the ParseNode associated with an InterpretationNode.
 "
@@ -734,13 +786,16 @@
 "
 	; Purge stuff associated with a single LgLinkInstanceNode
 	(define (extract-link-instance li)
-		(cog-extract-recursive li)
+		(if (not (null? li)) (cog-extract-recursive li))
 	)
 
-	; Purge stuff associated with a single word-instance
-	; Expects wi to be a WordInstanceNode
+	; Purge stuff associated with a single word-instance.
+	; Expects wi to be a WordInstanceNode.
+	; Calling extract-recursive will blow away most of the junk
+	; that the WordInstance appear in, but a few have to be removed
+	; manually. These are:
 	;
-	; Note that WordInstances appear in LgLinkInstances:
+	; The WordInstances that appear in LgLinkInstances:
 	;     EvaluationLink
 	;           LgLinkInstanceNode
 	;           ListLink
@@ -748,22 +803,28 @@
 	;               WordInstanceNode
 	;
 	; and so we have to track those down and extract them.
+	;
 	; They also appear in WordSequenceLinks:
 	;     WordSequenceLink
 	;         WordInstanceNode
 	;         NumberNode
-	; and so we need to get rid of the NumberNodes too.
+	; and so we need to get rid of the NumberNode's too.
+	;
+	; The extract-recursive will blow away everything else --
+	; the LemmaLinks, ReferenceLinks, etc.
 
 	(define (extract-word-instance wi)
 		(for-each
 			(lambda (x)
-				; extract the NumberNode
-				(if (eq? 'WordSequenceLink (cog-type x))
-					(cog-extract (cadr (cog-outgoing-set x)))
-				)
 				(if (eq? 'ListLink (cog-type x))
-					(extract-link-instance
+					(for-each extract-link-instance
 						(cog-chase-link 'EvaluationLink 'LgLinkInstanceNode x))
+				)
+				; Extract the NumberNode
+				(if (eq? 'WordSequenceLink (cog-type x))
+					(let ((oset (cog-outgoing-set x)))
+						(cog-extract x)
+						(cog-extract (cadr oset)))
 				)
 			)
 			(cog-incoming-set wi)
@@ -800,6 +861,12 @@
 			(if (eq? 'ParseLink (cog-type x))
 				; The car will be a ParseNode
 				(extract-parse (car (cog-outgoing-set x)))
+			)
+			; Extract the NumberNode
+			(if (eq? 'SentenceSequenceLink (cog-type x))
+				(let ((oset (cog-outgoing-set x)))
+					(cog-extract x)
+					(cog-extract (cadr oset)))
 			)
 		)
 		(cog-incoming-set sent)

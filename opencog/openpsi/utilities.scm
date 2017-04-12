@@ -1,6 +1,8 @@
-; Copyright (C) 2015-2016 OpenCog Foundation
 ;
+; utilities.scm
 ; Helper functions for OpenPsi
+;
+; Copyright (C) 2015-2016 OpenCog Foundation
 
 (use-modules (ice-9 regex)) ; For string-match
 (use-modules (srfi srfi-1)) ; For fold, delete-duplicates
@@ -8,16 +10,16 @@
 (use-modules (opencog) (opencog exec))
 
 ; --------------------------------------------------------------
+; XXX TODO: does this really need to be public?
 (define-public psi-prefix-str "OpenPsi: ")
 
 ; --------------------------------------------------------------
+; XXX TODO: does this really need to be public?
 (define-public (psi-suffix-str a-string)
 "
-  Returns the suffix of that follows `psi-prefix-str` sub-string.
+  psi-suffix-str STRING
 
-  a-string:
-    - a string that should have the`psi-prefix-str`
-
+  Given the string STRING, this removes the psi prefix string.
 "
     (let ((z-match (string-match psi-prefix-str a-string)))
         (if z-match
@@ -25,81 +27,6 @@
             (error (string-append "The string argument must have the prefix: "
                 "\"" psi-prefix-str "\". " "Instead got:" a-string) )
         )
-    )
-)
-
-; --------------------------------------------------------------
-(define-public (satisfaction-level rule)
-"
-  Returns the probability of satisfaction of the given rule's context as a
-  SimpleTruthValue.
-
-  rule:
-  - A psi-rule with context to be evaluated.
-"
-; NOTE
-; 1. This is the same as the `psi-satisfiable?`
-; 2. Should a context evaluator be added here?????
-; 3. What is the "right" way of communicating the level of information.
-    (let* ((pattern (SatisfactionLink (AndLink (psi-get-context rule))))
-           (result (cog-evaluate! pattern)))
-          (cog-delete pattern)
-          result
-    )
-)
-
-; --------------------------------------------------------------
-(define-public (most-weighted-atoms atom-list)
-"
-  It returns a list with non-duplicating atoms with the highest weight. If an
-  empty list is passed an empty list is returned. Weight of an atom is the
-  product of the stength and confidence of the atom.
-
-  atom-list:
-  - A list of atoms to be compared.
-"
-    (define (weight x)
-        (let ((rule-stv (cog-tv x))
-              (context-stv (satisfaction-level x)))
-            (* (tv-conf rule-stv) (tv-mean rule-stv)
-               (tv-conf context-stv) (tv-conf context-stv))))
-
-    (define (pick atom lst) ; prev is a `lst` and next `atom`
-        (cond
-            ((> (weight (car lst)) (weight atom)) lst)
-            ((= (weight (car lst)) (weight atom)) (append lst (list atom)))
-            (else (list atom))))
-
-    (if (null? atom-list)
-        '()
-       (delete-duplicates (fold pick (list (car atom-list)) atom-list))
-    )
-)
-
-; --------------------------------------------------------------
-(define-public (most-important-weighted-atoms atom-list)
-"
-  It returns a list with non-duplicating atoms with the highest
-  important-weight. If an empty list is passed an empty list is returned.
-  Weight of an atom is the product of the stength and confidence of the atom.
-
-  atom-list:
-  - A list of atoms to be compared.
-"
-    (define (weight x)
-        (let ((a-stv (cog-tv x))
-              (sti (assoc-ref (cog-av->alist (cog-av x)) 'sti)))
-            (* (tv-conf a-stv) (tv-mean a-stv) sti)))
-
-    (define (pick atom lst) ; prev is a `lst` and next `atom`
-        (cond
-            ((> (weight (car lst)) (weight atom)) lst)
-            ((= (weight (car lst)) (weight atom)) (append lst (list atom)))
-            (else (list atom))))
-
-    (if (null? atom-list)
-        '()
-        (delete-duplicates (fold pick (list (car atom-list)) atom-list))
     )
 )
 
@@ -142,7 +69,7 @@
     (define inset (cog-get-trunk ATOM))
 
     ;; Keep only those links that are of type MemberLink...
-    ;; and, more precisely, a MmeberLink that is of a valid
+    ;; and, more precisely, a MemberLink that is of a valid
     ;; psi-fule form.
     (filter psi-member?
         (delete-duplicates (cog-filter 'MemberLink inset)))
@@ -168,7 +95,7 @@
     (cog-delete set-of-duals)
 
     ;; Keep only those links that are of type MemberLink...
-    ;; and, more precisely, a MmeberLink that is of a valid
+    ;; and, more precisely, a MemberLink that is of a valid
     ;; psi-fule form.
     (filter psi-member?
         (delete-duplicates (cog-filter 'MemberLink duset)))
@@ -189,96 +116,78 @@
 )
 
 ; --------------------------------------------------------------
-(define (functionality-pattern tag-node functionlity functionality-name)
-"
-  Returns a StateLink with the following structure
-    (StateLink
-      (ListLink
-          (Node (string-append psi-prefix-str functionality-name))
-           tag-node)
-       functionlity)
-
-  tag-node:
-  - A demand/modulator node that the functionality is being added to.
-
-  functionlity:
-  - A DefinedPredicateNode/DefinedSchemaNode that is evaluated for performing
-    the functionality over the particular demand/modulator.
-
-  functionality-name:
-  - The type of functionality.
-"
-    (StateLink
-        (ListLink
-            (Node (string-append psi-prefix-str functionality-name))
-             tag-node)
-         functionlity)
-)
-
-; --------------------------------------------------------------
-(define-public
+(define
     (psi-set-functionality functionlity is-eval tag-node functionality-name)
 "
-  This function is used to add a functionality to a particular demand/modulator.
+  psi-set-functionality FUNC IS-EVAL TAG FUNC-NAME
 
-  functionlity:
-  - A DefinedPredicateNode/DefinedSchemaNode that is evaluated for performing
-    the functionality over the particular demand/modulator.
+  Associate a function with a particular demand or modulator.
 
-  is-eval:
-  - #t if the functionality is evaluatable and #f if not.
+  FUNC is an atom that can be executed or evaluated. It will perform
+    the functionality for the particular demand/modulator.
 
-  tag-node:
-  - A demand/modulator node that the functionality is being added to.
+  Set IS-EVAL to #t if the functionality is evaluatable and #f if
+    it is executable.
 
-  functionality-name:
-  - The type of functionality.
+  TAG should be a demand or modulator node that the functionality will
+    be assocaited with.
+
+  FUNC-NAME is the type of functionality.
 "
+    ;; XXX FIXME -- there is no need to force the use of DPN's or DSN's
+    ;; here. Any excutable or evaluatable atom should be allowed.
     (define (check-alias a-name)
         (if is-eval
             (cog-node 'DefinedPredicateNode a-name)
             (cog-node 'DefinedSchemaNode a-name)))
 
-    (let* ((name (string-append
+    (let* ( (name (string-append
                         psi-prefix-str functionality-name "-"
                         (cog-name tag-node)))
-           (alias (check-alias name)))
+            (alias (check-alias name)))
 
-       (if (null? alias)
-           (begin
-               (set! alias
-                    (if is-eval
-                        (DefinedPredicateNode name)
-                        (DefinedSchemaNode name)
-                    )
-                )
-               (DefineLink alias functionlity)
-               (functionality-pattern tag-node alias functionality-name)
+        (if (null? alias)
+            (begin
+                (set! alias
+                     (if is-eval
+                         (DefinedPredicateNode name)
+                         (DefinedSchemaNode name)))
+
+                ;; XXX FIXME why do we need a DefineLink here???
+                ;; why is an alias needed? what is the point of this?
+                (DefineLink alias functionlity)
+                (StateLink
+                    (ListLink
+                        (Node (string-append psi-prefix-str functionality-name))
+                         tag-node)
+                     alias)
                 alias
-           )
-            alias ; The assumption is that the EvaluationLink is already created
-       )
+            )
+        )
+        alias
     )
 )
 
 ; --------------------------------------------------------------
-(define-public (psi-get-functionality tag-node functionality-name)
+(define (psi-get-functionality tag-node functionality-name)
 "
-  Returns a list with the node that represents the functionality for the given
+  psi-get-functionality TAG FUNC-NAME
+
+  Return a list with the node that represents the functionality for the given
   demand/modulator or nil if it doesn't exist.
 
-  tag-node:
-  - A demand/modulator node that the functionality is being added to.
+  TAG should be a demand/modulator node that the functionality is
+  being added to.
 
-  functionality-name:
-  - The type of functionality.
+  FUNC-NAME should be the type of functionality.
 "
-; The assumption is that there will be only one element in the returned list.
-; This is a weak. Need a better way of using DefineLink short of defining
-; the relationship in the DefinedSchema/Predicate as a part of the alias-node
-; name.
-    (cog-outgoing-set (cog-execute! (GetLink
-        (functionality-pattern tag-node (Variable "$x") functionality-name))))
+    (define state
+       (ListLink
+           (Node (string-append psi-prefix-str functionality-name))
+           tag-node))
+
+    (cog-outgoing-set (cog-execute!
+        (GetLink (StateLink state (Variable "$x")))))
 )
 
 ; --------------------------------------------------------------
@@ -312,7 +221,7 @@
 (define (psi-get-value entity)
 "
   Get the current value of a psi-related entity. For entities with numerical
-  values, and NumberNode is returned.
+  values a NumberNode is returned.
 "
 	;(define result #f)
 
@@ -326,9 +235,10 @@
 		result
 		; else check if entity is an evaluation or predicate or schema
 		(let ((type (cog-type entity)))
-			(if (or (equal? type 'GroundedPredicateNode)
-				   (equal? type 'DefinedPredicateNode))
+			(if (equal? type 'GroundedPredicateNode)
 				(set! result (cog-evaluate! (Evaluation entity (List)))))
+			(if  (equal? type 'DefinedPredicateNode)
+				(set! result (cog-evaluate! entity)))
 			(if (equal? type 'PredicateNode)
 				(set! result (cog-tv entity)))
 			(if (or (equal? type 'GroundedSchemaNode)
@@ -368,7 +278,6 @@
 (define evaluationlink "EvaluationLink") ; not sure if we need this yet
 (define executionlink "ExecutionLink") ; ditto
 (define undefined "Undefined")
-
 
 (define (psi-set-value! entity value)
 "
@@ -484,3 +393,49 @@
 		                (set! rep-type statelink)))
 	            ;(format #t "Set value-rep type: ~a\n" rep-type)
 	            rep-type))))
+
+(define-public (psi-get-number-values-for-vars . vars)
+"
+	Get the current numerical values for a list of psi-related internal
+	variables. This function is written for calling via the REST API interface,
+	so the list of variables consist of string values of the variable names
+	(rather than the variables themselves).
+
+	vars - psi-related variable names as string values (rest arguments)
+
+	Returns a JSON representation of key-value pairs in the form of
+	{var_name: value, var_name2: value, ... }
+	If a psi variable with varname is not defined, #f is returned for the value.
+"
+	(define return '())
+
+	; Internal function to add the variable value of varname to the return list
+	(define (append-var-value varname)
+		(define value)
+		(define var-node (Concept (string-append psi-prefix-str varname)))
+		(set! value (psi-get-number-value var-node))
+		; If value is not set (iow, equal to #f), set it to null for javascript
+		; compatibility.
+		(if (eq? value #f)
+			(set! value "null"))
+		(set! return
+			(append return (list (format #f "\"~a\": ~a" varname value))))
+	)
+
+	(for-each append-var-value vars)
+
+	; return a string JSON object
+	(string-append "{" (string-join return ", ") "}")
+)
+
+; --------------------------------------------------------------
+; Baseline value functionality
+(define-public psi-baseline-value-node (Concept "psi-baseline-value"))
+
+(define-public (psi-set-baseline-value! modulator value)
+  (psi-set-value!
+    (List modulator psi-baseline-value-node) value))
+
+(define-public (psi-get-baseline-value modulator)
+  (psi-get-number-value
+    (List modulator psi-baseline-value-node)))

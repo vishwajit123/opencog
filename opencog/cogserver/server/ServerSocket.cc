@@ -54,14 +54,17 @@ void ServerSocket::Send(const std::string& cmd)
 
     // The most likely cause of an error is that the remote side has
     // closed the socket, even though we still had stuff to send.
-    // I beleive this is a ENOTCON errno, maybe its another one as well.
+    // I beleive this is a ENOTCON errno, maybe others as well.
+    // (for example, ECONNRESET `Connection reset by peer`)
     // Don't log these harmless errors.
     if (error.value() != boost::system::errc::success and
         error.value() != boost::asio::error::not_connected and
         error.value() != boost::asio::error::broken_pipe and
-        error.value() != boost::asio::error::bad_descriptor)
-        logger().warn("ServerSocket::Send(): %s on thread 0x%x",
-             error.message().c_str(), pthread_self());
+        error.value() != boost::asio::error::bad_descriptor and
+        error.value() != boost::asio::error::connection_reset)
+        logger().warn("ServerSocket::Send(): %s on thread 0x%x\n"
+                      "Attempted to send: %s",
+             error.message().c_str(), pthread_self(), cmd.c_str());
 }
 
 // As far as I can tell, boost::asio is not actually thread-safe,
@@ -86,7 +89,8 @@ void ServerSocket::SetCloseAndDelete()
     }
     catch (const boost::system::system_error& e)
     {
-        if (e.code() != boost::asio::error::not_connected)
+        if (e.code() != boost::asio::error::not_connected and
+            e.code() != boost::asio::error::bad_descriptor)
         {
             logger().error("ServerSocket::handle_connection(): Error closing socket: %s", e.what());
         }
@@ -154,7 +158,7 @@ void ServerSocket::handle_connection(void)
             std::istream is(&b);
             std::string line;
             std::getline(is, line);
-            if (!line.empty() && line[line.length()-1] == '\r') {
+            if (not line.empty() and line[line.length()-1] == '\r') {
                 line.erase(line.end()-1);
             }
             OnLine(line);
@@ -173,22 +177,34 @@ void ServerSocket::handle_connection(void)
         }
     }
 
+    // If the data sent to use is not new-line terminated, then
+    // there may still be some bytes sitting in the buffer. Get
+    // them and forward them on.  These are typically scheme
+    // strings issued from netcat, that simply did not have
+    // newlines at the end.
+    std::istream is(&b);
+    std::string line;
+    std::getline(is, line);
+    if (not line.empty() and line[line.length()-1] == '\r') {
+        line.erase(line.end()-1);
+    }
+    if (not line.empty())
+        OnLine(line);
+
     logger().debug("ServerSocket::exiting handle_connection()");
+    SetCloseAndDelete();
 
-    std::lock_guard<std::mutex> lock(_asio_crash);
-    try
-    {
-        _socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-        _socket->close();
-    }
-    catch (const boost::system::system_error& e)
-    {
-        if (e.code() != boost::asio::error::not_connected and
-            e.code() != boost::asio::error::bad_descriptor)
-        {
-            logger().error("ServerSocket::handle_connection(): Error closing socket: %s", e.what());
-        }
-    }
-
+    // In the standard scenario, ConsoleSocket inherits from this, and
+    // so deleting this will cause the ConsoleSocket dtor to run. This
+    // will, in turn, try to delete the shell, which will typically
+    // stall until the current evaluation is done. If the current
+    // evaluation is an infinite loop, then it will hang forever, and
+    // gdb will show a stack trace stuck in GenericShell::while_not_done()
+    // This is perfectly normal, and nothing can be done about it; we
+    // can't kill it without hurting users who launch long-running but
+    // finite commands via netcat. Nor can we magically unwind all the
+    // C++ state and stacks, to leave only some very naked evaluator
+    // running. The hang here, in the dtor, while_not_done(), really
+    // must be thought of as the normal sync point for completion.
     delete this;
 }

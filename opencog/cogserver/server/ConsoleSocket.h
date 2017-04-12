@@ -57,6 +57,8 @@ class ConsoleSocket : public ServerSocket
 private:
     GenericShell *_shell;
 
+    static std::string _prompt;
+
     // We need the use-count and the condition variables to avoid races
     // between asynchronous socket closures and unsent replies. So, for
     // example, the user may send a command, but then close the socket
@@ -73,9 +75,17 @@ private:
     // zero already; these use a different method of holding off the dtor.
     // Basically, the shell dtor has to run first, before the
     // ServerSocket::handle_connection() invokes this dtor.
-    unsigned int _use_count;
-    std::mutex _mtx;
-    std::condition_variable _cv;
+    volatile unsigned int _use_count;
+    std::mutex _in_use_mtx;
+    std::condition_variable _in_use_cv;
+
+    // A count of the number of concurrent open sockets. This is used
+    // to limit the number of connections to the cogserver, so that it
+    // doesn't crash with a `accept: Too many open files` error.
+    static unsigned int _max_open_sockets;
+    static volatile unsigned int _num_open_sockets;
+    static std::mutex _max_mtx;
+    static std::condition_variable _max_cv;
 
 protected:
 
@@ -109,8 +119,8 @@ public:
     ConsoleSocket(void);
     ~ConsoleSocket();
 
-    void get() { std::unique_lock<std::mutex> lck(_mtx); _use_count++; }
-    void put() { std::unique_lock<std::mutex> lck(_mtx); _use_count--; _cv.notify_all(); }
+    void get() { std::unique_lock<std::mutex> lck(_in_use_mtx); _use_count++; }
+    void put() { std::unique_lock<std::mutex> lck(_in_use_mtx); _use_count--; _in_use_cv.notify_all(); }
 
     /**
      * OnRequestComplete: called when a request has finished. It
@@ -137,6 +147,12 @@ public:
      */
     void SetShell(GenericShell *);
 
+    /**
+     * Assorted debugging utilities.
+     */
+    unsigned int get_use_count() const { return _use_count; }
+    unsigned int get_max_open_sockets() const { return _max_open_sockets; }
+    unsigned int get_num_open_sockets() const { return _num_open_sockets; }
 }; // class
 
 /** @}*/

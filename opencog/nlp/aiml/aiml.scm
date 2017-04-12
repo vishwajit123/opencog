@@ -242,32 +242,6 @@
 				))))
 		)))
 
-	; AIML spec compatibility:
-	; AIML uses a trie, and only accepts the longest-possible match -- that is,
-	; it matches the 1st word, and then 2nd, 3rd... and so on until there is a
-	; mismatch. So for example if there are two rules
-	;     <pattern>THERE IS A *</pattern>
-	;     <pattern>THERE IS *</pattern>
-	; and the input is "There is a cat", it will always choose the first one
-	; and never choose the second. The below makes sure that OC AIML behaves
-	; the same way.
-	(define (check-common RULES)
-		(define common 0)
-		(define rtn-rules (list))
-
-		(for-each
-			(lambda (r)
-				(define rule-pat (gdr (get-pred r "*-AIML-pattern-*")))
-				(define cnt (list-index (lambda (x y) (not (equal? x y)))
-					(cog-outgoing-set rule-pat) (cog-outgoing-set SENT)))
-				(cond
-					((> cnt common) (set! common cnt) (set! rtn-rules (list r)))
-					((= cnt common) (set! rtn-rules (append rtn-rules (list r))))))
-			RULES)
-
-		rtn-rules
-	)
-
 	(define (get-rules)
 		; For getting those "wildcard" rules
 		; TODO: Maybe it is better to get these rules using GetLink + SignatureLink,
@@ -283,9 +257,7 @@
 
 	; Get all of the rules that might apply to this sentence,
 	; and are inexact matches (i.e. have a variable in it)
-	; and then select those that shares the most common words with
-	; words at the beginning of the input sentence
-	(check-common (filter is-usable-rule? (map gar (get-rules))))
+	(filter is-usable-rule? (map gar (get-rules)))
 )
 
 ; Given a pattern-based rule, run it. Given that it has variables
@@ -326,8 +298,38 @@
 	(define pred (get-pred RULE "*-AIML-that-*"))
 	(if (null? pred) #t
 		(or (equal? (do-aiml-get (Concept "that")) (gdr pred))
+			; There may be a '*' in the 'that' tag of a rule as
+			; well -- use a MapLink to check the satisfiability
 			(not (null? (gar (cog-execute! (MapLink (gdr pred)
 				(Set (do-aiml-get (Concept "that"))))))))))
+)
+
+; AIML spec compatibility:
+; AIML uses a trie, and only accepts the longest-possible match -- that is,
+; it matches the 1st word, and then 2nd, 3rd... and so on until there is a
+; mismatch. So for example if there are two rules
+;     <pattern>THERE IS A *</pattern>
+;     <pattern>THERE IS *</pattern>
+; and the input is "There is a cat", it will always choose the first one
+; and never choose the second. The below makes sure that OC AIML behaves
+; the same way.
+(define (get-longest-match RULES SENT)
+	(define common 0)
+	(define rtn-rules (list))
+
+	(for-each
+		(lambda (r)
+			(define rule-pat (gdr (get-pred r "*-AIML-pattern-*")))
+			(define cnt (list-index (lambda (x y) (not (equal? x y)))
+				(cog-outgoing-set rule-pat) (cog-outgoing-set SENT)))
+			; If cnt is false, that's an exact match
+			(if (equal? cnt #f) (set! cnt (cog-arity SENT)))
+			(cond
+				((> cnt common) (set! common cnt) (set! rtn-rules (list r)))
+				((= cnt common) (set! rtn-rules (append rtn-rules (list r))))))
+		RULES)
+
+	rtn-rules
 )
 
 (define-public (aiml-get-applicable-rules SENT)
@@ -338,14 +340,15 @@
 "
 	(define exact-rules (get-exact-rules SENT))
 
-	(define top-rules
-		(filter is-topical-rule?
-			(if (null? exact-rules) (get-pattern-rules SENT) exact-rules)))
+	(define pat-rules (get-pattern-rules SENT))
+
+	(define top-rules (filter is-topical-rule?
+		(append exact-rules pat-rules)))
 
 	(define tht-rules
 		(filter satisfy-that? top-rules))
 
-	tht-rules
+	(get-longest-match tht-rules SENT)
 )
 
 ; --------------------------------------------------------------
@@ -480,7 +483,16 @@
 	; previous response. Right now, we just check one level deep.
 	; XXX FIXME .. Maybe check a much longer list??
 	(define (same-as-before? SENT)
-		(equal? SENT (do-aiml-get (Concept "that")))
+		(define that (do-aiml-get (Concept "that")))
+		(define that-len
+			(if (null? that) 0
+				(string-length (string-join
+					(map cog-name (cog-outgoing-set that)) " "))
+			))
+
+		; It is OK to repeat the last response if it is
+		; shorter than 15 characters
+		(and (equal? SENT that) (> that-len 15))
 	)
 
 	(define (do-while-same SENT CNT)
@@ -508,7 +520,8 @@
 		; "pickup search" manually for now, than giving no responses
 		(if (equal? response (List)) (begin
 			(display "no response has been generated, looking for a pickup\n")
-			(set! response (word-list-flatten (do-while-same (List) 5)))))
+			(set! response (word-list-flatten
+				(do-while-same (List (Glob "$star-1")) 5)))))
 
 		; The robots response is the current "that".
 		; Store up to two previous inputs and outputs
@@ -584,7 +597,8 @@
 (define-public (do-aiml-get KEY)
 	(define rekey (Concept (string-append "AIML state " (cog-name KEY))))
 	; gar discards the SetLink that the GetLink returns.
-	(gar (cog-execute! (Get (State rekey (Variable "$x"))))))
+	(gar (cog-execute! (Get (TypedVariable (Variable "$x") (Type "ListLink"))
+		(State rekey (Variable "$x"))))))
 
 ; AIML-tag bot -- Just like get, but for bot values.
 (DefineLink
@@ -594,7 +608,8 @@
 (define-public (do-aiml-bot-get KEY)
 	(define rekey (Concept (string-append "AIML-bot-" (cog-name KEY))))
 	; gar discards the SetLink that the GetLink returns.
-	(gar (cog-execute! (Get (State rekey (Variable "$x"))))))
+	(gar (cog-execute! (Get (TypedVariable (Variable "$x") (Type "ListLink"))
+		(State rekey (Variable "$x"))))))
 
 (DefineLink
 	(DefinedSchemaNode "AIML-tag input")

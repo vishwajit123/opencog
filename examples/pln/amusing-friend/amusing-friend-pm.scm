@@ -36,7 +36,7 @@
 (cog-bind implication-full-instantiation-rule)
 
 ;; (2) Distribute the scope of the implication that friends tend to be
-;; honest in the kb, applying implication-scope-distribution-rule.
+;; honest in the kb, applying implication-scope-to-implication-rule.
 ;;
 ;; Result should be:
 ;;
@@ -69,10 +69,10 @@
 ;;          (Evaluation
 ;;             (Predicate "is-honest")
 ;;             (Variable "$Y")))))
-(cog-bind implication-scope-distribution-rule)
+(cog-bind implication-scope-to-implication-rule)
 
 ;; (3) Infer the TV of the implicant of (2) using
-;; lambda-predicate-construction-rule
+;; predicate-lambda-introduction-rule
 ;;
 ;; Result should be:
 ;;
@@ -89,10 +89,10 @@
 ;;       (List
 ;;          (Variable "$X")
 ;;          (Variable "$Y"))))
-(cog-bind lambda-predicate-construction-rule)
+(cog-bind predicate-lambda-introduction-rule)
 
 ;; (4) Infer the TV of the implicand of (2) using
-;; lambda-predicate-construction-rule
+;; predicate-lambda-introduction-rule
 ;;
 ;; Result should be:
 ;;
@@ -151,7 +151,7 @@
 
 ;; (6) Distribute the scope of the implication that human
 ;; acquaintances tend to become friends in the kb, applying
-;; implication-scope-distribution-rule.
+;; implication-scope-to-implication-rule.
 ;;
 ;; Result should be:
 ;;
@@ -191,7 +191,7 @@
 ;;             (Variable "$Y")))))
 ;;
 ;; Actually, no need as it was inferred in (2)
-;; (cog-bind implication-scope-distribution-rule)
+;; (cog-bind implication-scope-to-implication-rule)
 
 ;; (7) Infer that honest human acquaintances tend to become friends
 ;; (more so than just human acquaintances). Apply rule
@@ -449,7 +449,7 @@
 ;;
 ;; Result should be:
 ;;
-;; (ImplicationLink (stv 0.13281251 0.5)
+;; (ImplicationScopeLink (stv 0.13281251 0.5)
 ;;    (VariableList
 ;;       (TypedVariableLink
 ;;          (VariableNode "$X")
@@ -548,7 +548,7 @@
 (cog-bind equivalence-scope-distribution-rule)
 
 ;; (14) Infer that if X is funny, then X is amusing. Apply the
-;; equivalence-to-double-implication-rule on (13).
+;; equivalence-to-implication-rule on (13).
 ;;
 ;; Result should be:
 ;;
@@ -577,7 +577,7 @@
 ;;
 ;; Result should be:
 ;;
-;; (ImplicationLink (stv 0.82352942 0.89999998)
+;; (ImplicationScopeLink (stv 0.82352942 0.89999998)
 ;;    (TypedVariableLink
 ;;       (VariableNode "$X")
 ;;       (TypeNode "ConceptNode")
@@ -604,7 +604,7 @@
 (cog-bind implication-full-instantiation-rule)
 
 ;; (17) Infer that Bob will be an amusing and honest friend. Apply the
-;; and-construction-rule over the results of (11), (12) and (16)
+;; and-introduction-rule over the results of (11), (12) and (16)
 ;;
 ;; Result should be:
 ;;
@@ -620,4 +620,4 @@
 ;;    (Evaluation
 ;;       (Predicate "is-honest")
 ;;       (Concept "Bob")))
-(cog-bind and-construction-grounded-evaluation-rule)
+(cog-bind and-introduction-grounded-evaluation-rule)
